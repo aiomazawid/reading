@@ -40,6 +40,9 @@ button:disabled{opacity:.5;cursor:default}
 .grid span{font-size:12.5px;color:var(--muted)}
 .dbg{margin-top:14px;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--muted);direction:ltr;text-align:left;word-break:break-all}
 .hidden{display:none}
+audio{width:100%;margin-top:14px}
+.row.two button{flex:1 1 140px}
+.warn{background:var(--badbg);color:var(--bad);border-radius:12px;padding:12px;margin-top:12px;font-weight:600}
 </style>
 </head>
 <body>
@@ -49,13 +52,27 @@ button:disabled{opacity:.5;cursor:default}
 
   <div class="card hidden" id="box">
     <div id="passage" lang="en" aria-label="Reading passage"></div>
-    <div class="row">
+    <div class="row" id="recrow">
       <button id="rec" type="button">ابدأ التسجيل</button>
       <span id="timer" aria-live="off"></span>
     </div>
-    <p class="note" id="priv">عند الضغط على «ابدأ التسجيل» سيُحفظ تسجيل صوتك ليستمع إليه معلمك. اقرأ في مكان هادئ وقرّب الجوال منك.</p>
+    <div id="review" class="hidden">
+      <p class="note">استمع إلى تسجيلك للتأكد أنه واضح وكامل، ثم أرسله. يُقبل إرسال واحد فقط.</p>
+      <audio id="player" controls preload="auto"></audio>
+      <div class="row two" id="rvbtns">
+        <button id="again" class="sec" type="button">أعد التسجيل</button>
+        <button id="send" type="button">أرسل نهائياً</button>
+      </div>
+      <div id="sure" class="hidden">
+        <div class="warn">هل أنت متأكد؟ بعد الإرسال لن تستطيع التسجيل مرة أخرى.</div>
+        <div class="row two">
+          <button id="back" class="sec" type="button">رجوع</button>
+          <button id="yes" type="button">نعم، أرسل</button>
+        </div>
+      </div>
+    </div>
+    <p class="note" id="priv">عند الضغط على «ابدأ التسجيل» يُسجَّل صوتك في جوالك فقط، ولا يُرسل إلا حين تضغط «أرسل نهائياً» فيُحفظ ليستمع إليه معلمك. اقرأ في مكان هادئ وقرّب الجوال منك.</p>
     <p class="msg" id="msg" role="status"></p>
-    <p class="note" id="left"></p>
   </div>
 
   <div class="dbg hidden" id="dbg"></div>
@@ -70,9 +87,8 @@ function $(i){return document.getElementById(i)}
 var q=new URLSearchParams(location.search), token=q.get('t')||'';
 try{ history.replaceState(null,'',location.pathname); }catch(e){}
 
-var text='', words=[], left=0;
+var text='', words=[];
 var stream=null, recorder=null, chunks=[], t0=0, timerId=0, stopTimer=0;
-var SR=window.SpeechRecognition||window.webkitSpeechRecognition, srec=null, wantSR=false, finalText='', interim='', srErr='', srEnded=null;
 var state='idle';
 
 function rdWords(s){return String(s||'').toLowerCase().replace(/[‘’]/g,"'").replace(/'/g,'').replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean);}
@@ -92,52 +108,36 @@ function drawPassage(marks){
   });
 }
 
-function setLeft(n){
-  left=n; $('left').textContent='المحاولات المتبقية: '+n;
-  $('rec').disabled = n<=0 || state!=='idle';
-  if(n<=0) say('انتهت محاولاتك لهذا النص.');
-}
-
 function load(){
   if(!/^[a-f0-9]{40}$/.test(token)){ $('ttl').textContent='الرابط غير صالح'; say('افتح هذه الصفحة من زر القراءة داخل البوابة.',true); $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); return; }
   fetch(EXEC+'?act=rtask&t='+encodeURIComponent(token)).then(function(r){return r.json();}).then(function(r){
+    if(r&&r.msg==='done'){ $('ttl').textContent='تم إرسال تسجيلك'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('سبق أن أرسلت تسجيلك لهذا النص. سيستمع إليه معلمك.'); return; }
     if(!r||!r.ok){ $('ttl').textContent='انتهت صلاحية الرابط'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('ارجع إلى البوابة واضغط زر القراءة من جديد.',true); return; }
     text=r.text; $('ttl').textContent=r.title||'Reading';
     words=text.split(/\s+/).filter(Boolean).map(function(t){return {tok:t,k:rdWords(t).length};});
-    drawPassage(null); $('box').classList.remove('hidden'); setLeft(r.left);
+    drawPassage(null); $('box').classList.remove('hidden');
   }).catch(function(){ $('ttl').textContent='تعذّر الاتصال'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); say('تحقق من الإنترنت ثم أعد فتح الصفحة من البوابة.',true); });
 }
 
-/* ---------- التسجيل ---------- */
-function startSR(){
-  if(!SR) return;
-  try{
-    srec=new SR(); srec.lang='en-US'; srec.continuous=true; srec.interimResults=true; srec.maxAlternatives=1;
-    srec.onresult=function(e){ interim=''; for(var i=e.resultIndex;i<e.results.length;i++){ var r=e.results[i]; if(r.isFinal){ finalText+=r[0].transcript+' '; } else { interim+=r[0].transcript+' '; } } };
-    srec.onerror=function(e){ srErr=e&&e.error||'error'; };
-    srec.onend=function(){ if(wantSR){ try{ srec.start(); }catch(_){} } else if(srEnded){ srEnded(); } };
-    srec.start();
-  }catch(e){ srErr='start-failed'; }
-}
-function stopSR(cb){
-  wantSR=false; var done=false; function fin(){ if(done) return; done=true; srEnded=null; cb(); }
-  if(!srec){ fin(); return; }
-  srEnded=fin; try{ srec.stop(); }catch(_){ fin(); } setTimeout(fin,1500);
-}
+/* ---------- التسجيل (محلي حتى الإرسال النهائي) ---------- */
+var blob=null, mime='', durMs=0, objUrl='';
+function show(id,on){ $(id).classList.toggle('hidden',!on); }
+function clearTake(){ try{ if(objUrl) URL.revokeObjectURL(objUrl); }catch(_){} objUrl=''; blob=null; chunks=[]; var p=$('player'); try{ p.pause(); }catch(_){} p.removeAttribute('src'); try{ p.load(); }catch(_){} }
+function toIdle(){ state='idle'; var b=$('rec'); b.disabled=false; b.classList.remove('recording'); b.textContent='ابدأ التسجيل'; $('timer').textContent=''; show('recrow',true); show('review',false); show('sure',false); show('rvbtns',true); }
 
 function begin(){
-  say(''); drawPassage(null);
+  say(''); clearTake();
   if(!navigator.mediaDevices||!window.MediaRecorder){ say('متصفحك لا يدعم التسجيل. جرّب Chrome.',true); return; }
   state='starting'; $('rec').disabled=true;
   navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(function(s){
-    stream=s; chunks=[]; finalText=''; interim=''; srErr='';
+    stream=s; chunks=[];
     var opts={}; try{ opts.audioBitsPerSecond=32000; }catch(_){}
     try{ recorder=new MediaRecorder(stream,opts); }catch(e){ recorder=new MediaRecorder(stream); }
     recorder.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data); };
-    recorder.start(1000); t0=Date.now(); wantSR=true; startSR();
-    state='recording'; var b=$('rec'); b.disabled=false; b.classList.add('recording'); b.innerHTML='<span class="dot"></span>إيقاف وإرسال';
+    recorder.start(1000); t0=Date.now();
+    state='recording'; var b=$('rec'); b.disabled=false; b.classList.add('recording'); b.innerHTML='<span class="dot"></span>إيقاف التسجيل';
     timerId=setInterval(function(){ $('timer').textContent=fmt(Date.now()-t0); },250);
-    stopTimer=setTimeout(function(){ if(state==='recording') finish(); },MAX_MS);
+    stopTimer=setTimeout(function(){ if(state==='recording') stopRec(); },MAX_MS);
   }).catch(function(e){
     state='idle'; $('rec').disabled=false;
     var n=e&&e.name||'';
@@ -145,52 +145,51 @@ function begin(){
   });
 }
 
-function finish(){
-  if(state!=='recording') return; state='sending';
+function stopRec(){
+  if(state!=='recording') return; state='stopping';
   clearInterval(timerId); clearTimeout(stopTimer);
-  var ms=Date.now()-t0, b=$('rec'); b.disabled=true; b.classList.remove('recording'); b.textContent='جارٍ الإرسال...'; say('جارٍ إرسال تسجيلك وتقييمه، لا تغلق الصفحة...');
-  var mime=(recorder&&recorder.mimeType)||'audio/webm';
+  durMs=Date.now()-t0; $('rec').disabled=true;
+  mime=(recorder&&recorder.mimeType)||'audio/webm';
   recorder.onstop=function(){
     try{ stream.getTracks().forEach(function(t){t.stop();}); }catch(_){}
-    stopSR(function(){
-      var transcript=(finalText+' '+interim).replace(/\s+/g,' ').trim();
-      var blob=new Blob(chunks,{type:mime});
-      if(blob.size<1500){ reset('التسجيل قصير جداً أو فارغ. أعد المحاولة وتأكد أن الميكروفون يعمل.',true,ms,transcript,blob.size); return; }
-      var fr=new FileReader();
-      fr.onload=function(){
-        var b64=String(fr.result).split(',')[1]||'';
-        fetch(EXEC,{method:'POST',body:JSON.stringify({t:token,audio:b64,mime:mime,transcript:transcript,ms:ms})})
-          .then(function(r){return r.json();}).then(function(r){ done(r,transcript,ms,blob.size); })
-          .catch(function(){ reset('تعذّر الإرسال. تحقق من الإنترنت وأعد المحاولة.',true,ms,transcript,blob.size); });
-      };
-      fr.readAsDataURL(blob);
-    });
+    var bl=new Blob(chunks,{type:mime}); chunks=[];
+    if(bl.size<1500){ toIdle(); say('التسجيل قصير جداً أو فارغ. أعد المحاولة وتأكد أن الميكروفون يعمل.',true); dbg('ms='+durMs+' bytes='+bl.size); return; }
+    blob=bl; objUrl=URL.createObjectURL(bl); $('player').src=objUrl;
+    state='review'; show('recrow',false); show('review',true); show('sure',false); show('rvbtns',true);
+    say('تم التسجيل (لم يُرسل بعد). استمع إليه ثم اختر.'); dbg('ms='+durMs+' bytes='+bl.size+' mime='+mime);
   };
   try{ recorder.stop(); }catch(_){ recorder.onstop(); }
 }
 
-function reset(m,bad,ms,tr,bytes){
-  state='idle'; var b=$('rec'); b.classList.remove('recording'); b.textContent='ابدأ التسجيل'; $('timer').textContent=''; say(m,bad); setLeft(left);
-  dbg('ms='+ms+' bytes='+bytes+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words='+(tr?tr.split(' ').length:0));
+function doSend(){
+  if(state!=='review'||!blob) return; state='sending';
+  show('sure',false); show('rvbtns',false); say('جارٍ الإرسال، لا تغلق الصفحة...');
+  var fr=new FileReader();
+  fr.onload=function(){
+    var b64=String(fr.result).split(',')[1]||'';
+    fetch(EXEC,{method:'POST',body:JSON.stringify({t:token,audio:b64,mime:mime,transcript:'',ms:durMs})})
+      .then(function(r){return r.json();}).then(function(r){ sent(r); })
+      .catch(function(){ state='review'; show('rvbtns',true); say('تعذّر الإرسال. تحقق من الإنترنت ثم اضغط «أرسل نهائياً» من جديد. تسجيلك ما زال محفوظاً في جوالك.',true); });
+  };
+  fr.readAsDataURL(blob);
 }
 
-function done(r,transcript,ms,bytes){
+function sent(r){
   if(!r||!r.ok){
-    var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد.',limit:'انتهت محاولاتك.',audio:'حجم التسجيل غير مقبول.',busy:'الخادم مشغول، أعد المحاولة بعد لحظات.'}[r&&r.msg]||'حدث خطأ. أعد المحاولة.';
-    reset(m,true,ms,transcript,bytes); return;
+    var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد وسجّل مرة أخرى.',limit:'سبق أن أرسلت تسجيلك لهذا النص.',done:'سبق أن أرسلت تسجيلك لهذا النص.',audio:'حجم التسجيل غير مقبول. أعد تسجيلاً أقصر.',busy:'الخادم مشغول، اضغط «أرسل نهائياً» بعد لحظات.'}[r&&r.msg]||'حدث خطأ. اضغط «أرسل نهائياً» من جديد.';
+    if(r&&(r.msg==='limit'||r.msg==='done'||r.msg==='expired')){ state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false); say(m,true); return; }
+    state='review'; show('rvbtns',true); say(m,true); return;
   }
-  state='idle'; var b=$('rec'); b.classList.remove('recording'); b.textContent='تسجيل جديد'; $('timer').textContent='';
-  setLeft(r.left);
-  if(!transcript){
-    say('تم حفظ تسجيلك. سيستمع إليه معلمك وتصلك النتيجة لاحقاً.');
-    dbg('ms='+ms+' bytes='+bytes+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words=0');
-    return;
-  }
-  say('تم حفظ تسجيلك. سيستمع إليه معلمك وتصلك النتيجة لاحقاً.');
-  dbg('ms='+ms+' bytes='+bytes+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words='+transcript.split(' ').length);
+  state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false);
+  say('تم حفظ تسجيلك وإرساله. سيستمع إليه معلمك وتصلك النتيجة لاحقاً. يمكنك إغلاق الصفحة.');
 }
 
-$('rec').onclick=function(){ if(state==='idle') begin(); else if(state==='recording') finish(); };
+$('rec').onclick=function(){ if(state==='idle') begin(); else if(state==='recording') stopRec(); };
+$('again').onclick=function(){ if(state==='review'){ clearTake(); say(''); toIdle(); } };
+$('send').onclick=function(){ if(state==='review'){ show('rvbtns',false); show('sure',true); } };
+$('back').onclick=function(){ if(state==='review'){ show('sure',false); show('rvbtns',true); } };
+$('yes').onclick=doSend;
+window.addEventListener('beforeunload',function(e){ if(state==='review'||state==='recording'||state==='sending'){ e.preventDefault(); e.returnValue=''; } });
 window.addEventListener('pagehide',function(){ try{ if(stream) stream.getTracks().forEach(function(t){t.stop();}); }catch(_){} });
 load();
 })();
