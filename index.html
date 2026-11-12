@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mic test</title></head><body style="font-family:sans-serif;padding:16px">
+<h3>Mic test</h3><pre id="out"></pre>
+<button id="b" style="font-size:18px;padding:10px">Record 3 sec</button>
+<script>
+const out=document.getElementById('out');function log(s){out.textContent+=s+'\n'}
+log('framed: '+(window.self!==window.top));
+try{const pp=document.permissionsPolicy||document.featurePolicy;log('policy allows microphone: '+(pp?pp.allowsFeature('microphone'):'n/a'));}catch(e){log('policy err')}
+log('isSecureContext: '+window.isSecureContext);
+log('MediaRecorder: '+(typeof MediaRecorder));
+log('SpeechRecognition: '+!!(window.SpeechRecognition||window.webkitSpeechRecognition));
+document.getElementById('b').onclick=async()=>{
+ try{const s=await navigator.mediaDevices.getUserMedia({audio:true});log('getUserMedia OK');
+  const r=new MediaRecorder(s);const ch=[];r.ondataavailable=e=>ch.push(e.data);
+  r.onstop=()=>{const b=new Blob(ch);log('recorded bytes: '+b.size+' type: '+r.mimeType);s.getTracks().forEach(t=>t.stop())};
+  r.start();setTimeout(()=>r.stop(),3000);
+ }catch(e){log('getUserMedia FAIL: '+e.name+' - '+e.message)}
+};
+</script></body></html>
