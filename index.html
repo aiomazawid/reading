@@ -58,17 +58,6 @@ button:disabled{opacity:.5;cursor:default}
     <p class="note" id="left"></p>
   </div>
 
-  <div class="card hidden" id="res" aria-live="polite">
-    <div class="score"><span id="sc">0</span><small> / 100</small></div>
-    <p class="note" id="scnote">تقدير تلقائي لدقة القراءة. قد يختلف عن تقييم معلمك بعد أن يستمع لتسجيلك.</p>
-    <div class="grid">
-      <div><b id="gA">-</b><span>دقة ما قلته</span></div>
-      <div><b id="gC">-</b><span>اكتمال النص</span></div>
-      <div><b id="gP">-</b><span>مناسبة السرعة</span></div>
-    </div>
-    <p class="note">الأخضر: كلمات قُرئت صحيحة. الأحمر: كلمات لم تُسمع صحيحة.</p>
-  </div>
-
   <div class="dbg hidden" id="dbg"></div>
 </main>
 
@@ -88,7 +77,10 @@ var state='idle';
 
 function rdWords(s){return String(s||'').toLowerCase().replace(/[‘’]/g,"'").replace(/'/g,'').replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(Boolean);}
 function say(m,bad){var e=$('msg'); e.textContent=m||''; e.className='msg'+(bad?' err':'');}
-function dbg(m){var d=$('dbg'); d.classList.remove('hidden'); d.textContent=m;}
+/* سطر التشخيص مخفي عن الطلاب: يظهر للمعلم بالضغط 5 مرات على العنوان */
+var dbgShow=false, taps=0;
+function dbg(m){var d=$('dbg'); d.textContent=m; if(dbgShow) d.classList.remove('hidden');}
+$('ttl').onclick=function(){ if(++taps>=5){ dbgShow=true; if($('dbg').textContent) $('dbg').classList.remove('hidden'); } };
 function fmt(ms){var s=Math.floor(ms/1000);return ('0'+Math.floor(s/60)).slice(-2)+':'+('0'+s%60).slice(-2);}
 
 function drawPassage(marks){
@@ -134,7 +126,7 @@ function stopSR(cb){
 }
 
 function begin(){
-  say(''); $('res').classList.add('hidden'); drawPassage(null);
+  say(''); drawPassage(null);
   if(!navigator.mediaDevices||!window.MediaRecorder){ say('متصفحك لا يدعم التسجيل. جرّب Chrome.',true); return; }
   state='starting'; $('rec').disabled=true;
   navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(function(s){
@@ -187,17 +179,15 @@ function done(r,transcript,ms,bytes){
     var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد.',limit:'انتهت محاولاتك.',audio:'حجم التسجيل غير مقبول.',busy:'الخادم مشغول، أعد المحاولة بعد لحظات.'}[r&&r.msg]||'حدث خطأ. أعد المحاولة.';
     reset(m,true,ms,transcript,bytes); return;
   }
-  state='idle'; var b=$('rec'); b.classList.remove('recording'); b.textContent='أعد المحاولة'; $('timer').textContent='';
+  state='idle'; var b=$('rec'); b.classList.remove('recording'); b.textContent='تسجيل جديد'; $('timer').textContent='';
   setLeft(r.left);
   if(!transcript){
-    say('حُفظ تسجيلك وسيستمع إليه معلمك. تعذّر التقييم التلقائي على هذا الجهاز.');
+    say('تم حفظ تسجيلك. سيستمع إليه معلمك وتصلك النتيجة لاحقاً.');
     dbg('ms='+ms+' bytes='+bytes+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words=0');
     return;
   }
-  say('تم الحفظ.');
-  $('sc').textContent=r.score; $('gA').textContent=r.accuracy+'%'; $('gC').textContent=r.complete+'%'; $('gP').textContent=r.pace+'%';
-  $('res').classList.remove('hidden'); drawPassage(r.marks||null);
-  dbg('ms='+ms+' bytes='+bytes+' wpm='+r.wpm+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words='+transcript.split(' ').length);
+  say('تم حفظ تسجيلك. سيستمع إليه معلمك وتصلك النتيجة لاحقاً.');
+  dbg('ms='+ms+' bytes='+bytes+' sr='+(SR?'yes':'no')+' srErr='+srErr+' words='+transcript.split(' ').length);
 }
 
 $('rec').onclick=function(){ if(state==='idle') begin(); else if(state==='recording') finish(); };
