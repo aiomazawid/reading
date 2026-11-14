@@ -116,6 +116,8 @@ function load(){
     if(r&&r.msg==='done'){ $('ttl').textContent='Your recording was sent'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('You have used all your attempts for this text. Your score is in the portal.'); backLink(); return; }
     if(!r||!r.ok){ $('ttl').textContent='Link expired'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('Go back to the portal and press the reading button again.',true); backLink(); return; }
     text=r.text; $('ttl').textContent=r.title||'Reading';
+    /* Demo account only (server flag): minimal page, one short line under the record button */
+    if(r.demo){ window.__recLbl='Record'; $('rec').textContent='Record'; var sb=document.querySelector('.sub'); if(sb) sb.classList.add('hidden'); $('priv').textContent='Your teacher will listen to your recording.'; var rn=document.querySelector('#review .note'); if(rn) rn.textContent='Listen, then send.'; }
     if(r.max>1) $('warn').textContent=(r.att<r.max)?('This is attempt '+r.att+' of '+r.max+'. After sending, your score appears in the portal, and you will have one more attempt.'):'This is your last attempt. After sending, your score appears in the portal.';
     words=text.split(/\s+/).filter(Boolean).map(function(t){return {tok:t,k:rdWords(t).length};});
     drawPassage(null); $('box').classList.remove('hidden');
@@ -126,7 +128,7 @@ function load(){
 var blob=null, mime='', durMs=0, objUrl='';
 function show(id,on){ $(id).classList.toggle('hidden',!on); }
 function clearTake(){ try{ if(objUrl) URL.revokeObjectURL(objUrl); }catch(_){} objUrl=''; blob=null; chunks=[]; var p=$('player'); try{ p.pause(); }catch(_){} p.removeAttribute('src'); try{ p.load(); }catch(_){} }
-function toIdle(){ state='idle'; var b=$('rec'); b.disabled=false; b.classList.remove('recording'); b.textContent='Start recording'; $('timer').textContent=''; show('recrow',true); show('review',false); show('sure',false); show('rvbtns',true); }
+function toIdle(){ state='idle'; var b=$('rec'); b.disabled=false; b.classList.remove('recording'); b.textContent=window.__recLbl||'Start recording'; $('timer').textContent=''; show('recrow',true); show('review',false); show('sure',false); show('rvbtns',true); }
 
 function begin(){
   say(''); clearTake();
