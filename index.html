@@ -61,17 +61,17 @@ audio{width:100%;margin-top:14px}
       <audio id="player" controls preload="auto"></audio>
       <div class="row two" id="rvbtns">
         <button id="again" class="sec" type="button">أعد التسجيل</button>
-        <button id="send" type="button">أرسل نهائياً</button>
+        <button id="send" type="button">أرسل</button>
       </div>
       <div id="sure" class="hidden">
-        <div class="warn">هل أنت متأكد؟ بعد الإرسال لن تستطيع التسجيل مرة أخرى.</div>
+        <div class="warn" id="warn">هل أنت متأكد من الإرسال؟</div>
         <div class="row two">
           <button id="back" class="sec" type="button">رجوع</button>
           <button id="yes" type="button">نعم، أرسل</button>
         </div>
       </div>
     </div>
-    <p class="note" id="priv">عند الضغط على «ابدأ التسجيل» يُسجَّل صوتك في جوالك فقط، ولا يُرسل إلا حين تضغط «أرسل نهائياً» فيُحفظ ليستمع إليه معلمك. اقرأ في مكان هادئ وقرّب الجوال منك.</p>
+    <p class="note" id="priv">عند الضغط على «ابدأ التسجيل» يُسجَّل صوتك في جوالك فقط، ولا يُرسل إلا حين تضغط «أرسل» فيُحفظ ليستمع إليه معلمك. اقرأ في مكان هادئ وقرّب الجوال منك.</p>
     <p class="msg" id="msg" role="status"></p>
   </div>
 
@@ -111,9 +111,10 @@ function drawPassage(marks){
 function load(){
   if(!/^[a-f0-9]{40}$/.test(token)){ $('ttl').textContent='الرابط غير صالح'; say('افتح هذه الصفحة من زر القراءة داخل البوابة.',true); $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); return; }
   fetch(EXEC+'?act=rtask&t='+encodeURIComponent(token)).then(function(r){return r.json();}).then(function(r){
-    if(r&&r.msg==='done'){ $('ttl').textContent='تم إرسال تسجيلك'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('سبق أن أرسلت تسجيلك لهذا النص. سيستمع إليه معلمك.'); return; }
+    if(r&&r.msg==='done'){ $('ttl').textContent='تم إرسال تسجيلك'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('استنفدت محاولاتك لهذا النص. درجتك في البوابة.'); return; }
     if(!r||!r.ok){ $('ttl').textContent='انتهت صلاحية الرابط'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('ارجع إلى البوابة واضغط زر القراءة من جديد.',true); return; }
     text=r.text; $('ttl').textContent=r.title||'Reading';
+    if(r.max>1) $('warn').textContent=(r.att<r.max)?('هذه المحاولة '+r.att+' من '+r.max+'. بعد الإرسال تظهر درجتك في البوابة، وتبقى لك محاولة أخرى.'):'هذه محاولتك الأخيرة. بعد الإرسال تظهر درجتك في البوابة.';
     words=text.split(/\s+/).filter(Boolean).map(function(t){return {tok:t,k:rdWords(t).length};});
     drawPassage(null); $('box').classList.remove('hidden');
   }).catch(function(){ $('ttl').textContent='تعذّر الاتصال'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); say('تحقق من الإنترنت ثم أعد فتح الصفحة من البوابة.',true); });
@@ -169,19 +170,19 @@ function doSend(){
     var b64=String(fr.result).split(',')[1]||'';
     fetch(EXEC,{method:'POST',body:JSON.stringify({t:token,audio:b64,mime:mime,transcript:'',ms:durMs})})
       .then(function(r){return r.json();}).then(function(r){ sent(r); })
-      .catch(function(){ state='review'; show('rvbtns',true); say('تعذّر الإرسال. تحقق من الإنترنت ثم اضغط «أرسل نهائياً» من جديد. تسجيلك ما زال محفوظاً في جوالك.',true); });
+      .catch(function(){ state='review'; show('rvbtns',true); say('تعذّر الإرسال. تحقق من الإنترنت ثم اضغط «أرسل» من جديد. تسجيلك ما زال محفوظاً في جوالك.',true); });
   };
   fr.readAsDataURL(blob);
 }
 
 function sent(r){
   if(!r||!r.ok){
-    var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد وسجّل مرة أخرى.',limit:'سبق أن أرسلت تسجيلك لهذا النص.',done:'سبق أن أرسلت تسجيلك لهذا النص.',audio:'حجم التسجيل غير مقبول. أعد تسجيلاً أقصر.',busy:'الخادم مشغول، اضغط «أرسل نهائياً» بعد لحظات.'}[r&&r.msg]||'حدث خطأ. اضغط «أرسل نهائياً» من جديد.';
+    var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد وسجّل مرة أخرى.',limit:'استنفدت محاولاتك لهذا النص.',done:'استنفدت محاولاتك لهذا النص.',audio:'حجم التسجيل غير مقبول. أعد تسجيلاً أقصر.',busy:'الخادم مشغول، اضغط «أرسل» بعد لحظات.'}[r&&r.msg]||'حدث خطأ. اضغط «أرسل» من جديد.';
     if(r&&(r.msg==='limit'||r.msg==='done'||r.msg==='expired')){ state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false); say(m,true); return; }
     state='review'; show('rvbtns',true); say(m,true); return;
   }
   state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false);
-  say('تم حفظ تسجيلك وإرساله. سيستمع إليه معلمك وتصلك النتيجة لاحقاً. يمكنك إغلاق الصفحة.');
+  say('تم إرسال تسجيلك. ارجع إلى البوابة لترى درجتك.');
 }
 
 $('rec').onclick=function(){ if(state==='idle') begin(); else if(state==='recording') stopRec(); };
