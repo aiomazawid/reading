@@ -73,6 +73,7 @@ audio{width:100%;margin-top:14px}
     </div>
     <p class="note" id="priv">عند الضغط على «ابدأ التسجيل» يُسجَّل صوتك في جوالك فقط، ولا يُرسل إلا حين تضغط «أرسل» فيُحفظ ليستمع إليه معلمك. اقرأ في مكان هادئ وقرّب الجوال منك.</p>
     <p class="msg" id="msg" role="status"></p>
+    <p class="hidden" id="backp" style="text-align:center;margin-top:14px"><a id="backa" href="#" style="font-weight:bold">العودة إلى البوابة</a></p>
   </div>
 
   <div class="dbg hidden" id="dbg"></div>
@@ -83,6 +84,7 @@ audio{width:100%;margin-top:14px}
 'use strict';
 var EXEC='https://script.google.com/macros/s/AKfycbwD9WMpiq9t8boJEcrB5bjxxnRq3g1dEF4zrx1pDoI6YrOzUft9Em66qzgCzq_iIYz8/exec';
 var MAX_MS=120000;
+function backLink(){ $('backa').href=EXEC; $('backp').classList.remove('hidden'); }
 function $(i){return document.getElementById(i)}
 var q=new URLSearchParams(location.search), token=q.get('t')||'';
 try{ history.replaceState(null,'',location.pathname); }catch(e){}
@@ -109,10 +111,10 @@ function drawPassage(marks){
 }
 
 function load(){
-  if(!/^[a-f0-9]{40}$/.test(token)){ $('ttl').textContent='الرابط غير صالح'; say('افتح هذه الصفحة من زر القراءة داخل البوابة.',true); $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); return; }
+  if(!/^[a-f0-9]{40}$/.test(token)){ $('ttl').textContent='الرابط غير صالح'; say('افتح هذه الصفحة من زر القراءة داخل البوابة.',true); backLink(); $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); return; }
   fetch(EXEC+'?act=rtask&t='+encodeURIComponent(token)).then(function(r){return r.json();}).then(function(r){
-    if(r&&r.msg==='done'){ $('ttl').textContent='تم إرسال تسجيلك'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('استنفدت محاولاتك لهذا النص. درجتك في البوابة.'); return; }
-    if(!r||!r.ok){ $('ttl').textContent='انتهت صلاحية الرابط'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('ارجع إلى البوابة واضغط زر القراءة من جديد.',true); return; }
+    if(r&&r.msg==='done'){ $('ttl').textContent='تم إرسال تسجيلك'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('استنفدت محاولاتك لهذا النص. درجتك في البوابة.'); backLink(); return; }
+    if(!r||!r.ok){ $('ttl').textContent='انتهت صلاحية الرابط'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('ارجع إلى البوابة واضغط زر القراءة من جديد.',true); backLink(); return; }
     text=r.text; $('ttl').textContent=r.title||'Reading';
     if(r.max>1) $('warn').textContent=(r.att<r.max)?('هذه المحاولة '+r.att+' من '+r.max+'. بعد الإرسال تظهر درجتك في البوابة، وتبقى لك محاولة أخرى.'):'هذه محاولتك الأخيرة. بعد الإرسال تظهر درجتك في البوابة.';
     words=text.split(/\s+/).filter(Boolean).map(function(t){return {tok:t,k:rdWords(t).length};});
@@ -178,11 +180,12 @@ function doSend(){
 function sent(r){
   if(!r||!r.ok){
     var m={expired:'انتهت صلاحية الرابط. ارجع إلى البوابة وافتح الصفحة من جديد وسجّل مرة أخرى.',limit:'استنفدت محاولاتك لهذا النص.',done:'استنفدت محاولاتك لهذا النص.',audio:'حجم التسجيل غير مقبول. أعد تسجيلاً أقصر.',busy:'الخادم مشغول، اضغط «أرسل» بعد لحظات.'}[r&&r.msg]||'حدث خطأ. اضغط «أرسل» من جديد.';
-    if(r&&(r.msg==='limit'||r.msg==='done'||r.msg==='expired')){ state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false); say(m,true); return; }
+    if(r&&(r.msg==='limit'||r.msg==='done'||r.msg==='expired')){ state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false); say(m,true); backLink(); return; }
     state='review'; show('rvbtns',true); say(m,true); return;
   }
   state='done'; clearTake(); show('review',false); show('recrow',false); show('priv',false);
-  say('تم إرسال تسجيلك. ارجع إلى البوابة لترى درجتك.');
+  say('تم إرسال تسجيلك. جارٍ العودة إلى البوابة لترى درجتك...'); backLink();
+  setTimeout(function(){ try{ location.replace(EXEC); }catch(e){ location.href=EXEC; } },1500);
 }
 
 $('rec').onclick=function(){ if(state==='idle') begin(); else if(state==='recording') stopRec(); };
