@@ -116,8 +116,8 @@ function load(){
     if(r&&r.msg==='done'){ $('ttl').textContent='Your recording was sent'; $('box').classList.remove('hidden'); $('passage').classList.add('hidden'); $('recrow').classList.add('hidden'); $('priv').classList.add('hidden'); say('You have used all your attempts for this text. Your score is in the portal.'); backLink(); return; }
     if(!r||!r.ok){ $('ttl').textContent='Link expired'; $('box').classList.remove('hidden'); $('rec').classList.add('hidden'); $('priv').classList.add('hidden'); say('Go back to the portal and press the reading button again.',true); backLink(); return; }
     text=r.text; $('ttl').textContent=r.title||'Reading';
-    /* Demo account only (server flag): minimal page, one short line under the record button */
-    if(r.demo){ window.__recLbl='Record'; $('rec').textContent='Record'; var sb=document.querySelector('.sub'); if(sb) sb.classList.add('hidden'); $('priv').textContent='Your teacher will listen to your recording.'; var rn=document.querySelector('#review .note'); if(rn) rn.textContent='Listen, then send.'; }
+    /* Minimal page for everyone: one short line under the record button */
+    { window.__recLbl='Record'; $('rec').textContent='Record'; var sb=document.querySelector('.sub'); if(sb) sb.classList.add('hidden'); $('priv').textContent='Your teacher will listen to your recording.'; var rn=document.querySelector('#review .note'); if(rn) rn.textContent='Listen, then send.'; }
     if(r.max>1) $('warn').textContent=(r.att<r.max)?('This is attempt '+r.att+' of '+r.max+'. After sending, your score appears in the portal, and you will have one more attempt.'):'This is your last attempt. After sending, your score appears in the portal.';
     words=text.split(/\s+/).filter(Boolean).map(function(t){return {tok:t,k:rdWords(t).length};});
     drawPassage(null); $('box').classList.remove('hidden');
